@@ -31,7 +31,7 @@ public protocol Socketable: SocketReader, SocketWriter {
 }
 
 public extension Socketable {
-    func acceptClientConnectionP() throws -> Socketable {
+    public func acceptClientConnectionP() throws -> Socketable {
         return try self.acceptClientConnectionP(invokeDelegate: true)
     }
 }
