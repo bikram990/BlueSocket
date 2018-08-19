@@ -169,7 +169,7 @@ class StreamPair: NSObject, SocketReader, SocketWriter, StreamDelegate {
 }
 
 //MARK: - NetServiceSocket
-class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
+public class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
 	
 	public typealias Signature = SocketSignature
 	public typealias Address = SocketSignature.Address
@@ -183,55 +183,55 @@ class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
     static var clientFileDescriptors:Array<Int32> = []
     static var serverFileDescriptors:Array<Int32> = []
     
-    var remoteHostname: String {
+    public var remoteHostname: String {
         get {
             return Defaults.NO_HOSTNAME
         }
     }
     
-    var remotePort: Int32 {
+    public var remotePort: Int32 {
         get {
             return Defaults.SOCKET_INVALID_PORT
         }
     }
     
-    var signature: SocketSignature? {
+    public var signature: SocketSignature? {
         get {
             return nil
         }
     }
     
-    var delegate: SSLServiceDelegate?
+    public var delegate: SSLServiceDelegate?
     
-    var isListening: Bool = false
+    public var isListening: Bool = false
     
-    var listeningPort: Int32 {
+    public var listeningPort: Int32 {
         get {
             return Int32(self.service?.port ?? Int(SocketDefaults.SOCKET_INVALID_PORT))
         }
     }
     
-    var socketfd: Int32
+    public var socketfd: Int32
     
-    var remoteConnectionClosed: Bool {
+    public var remoteConnectionClosed: Bool {
         get {
             return (self.pair == nil)
         }
     }
     
-    func setBlocking(mode: Bool) throws {
+    public func setBlocking(mode: Bool) throws {
         //this is always non-blocking
         if mode == true {
 			throw Error(code: ErrorConstants.SOCKET_ERR_NOT_SUPPORTED_YET, reason: "Setting Blocking mode is not suppported")
         }
     }
     
-    func listen(on port: Int, maxBacklogSize: Int, allowPortReuse: Bool) throws {
+    public func listen(on port: Int, maxBacklogSize: Int, allowPortReuse: Bool) throws {
         self.port = port
         try self.listenForConnections(includingPeer2Peer: true)
     }
     
-    func invokeDelegateOnAcceptP(for: Socketable) throws {
+    public func invokeDelegateOnAcceptP(for: Socketable) throws {
 		throw Error(code: ErrorConstants.SOCKET_ERR_NOT_SUPPORTED_YET, reason: "invokeDelegateOnAcceptP is not suppported")
     }
     
@@ -241,7 +241,7 @@ class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
     private var condition:NSCondition = NSCondition.init()
     var newSocket:NetServiceSocket! = nil
     
-    func acceptClientConnectionP(invokeDelegate: Bool) throws -> Socketable {
+    public func acceptClientConnectionP(invokeDelegate: Bool) throws -> Socketable {
         self.condition.lock()
         self.readySemaphore.signal()
         self.condition.wait()
@@ -315,7 +315,7 @@ class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
     
     
     //MARK: - handling
-    func close() -> Void {
+    public func close() -> Void {
         self.service?.stop()
         self.pair?.close()
     }
@@ -326,57 +326,57 @@ class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
 		}
         return pair
     }
-    
-    //MARK: - NetService Delegate
-    func netServiceWillPublish(_ sender: NetService) {
-        
-    }
-    
-    func netServiceWillResolve(_ sender: NetService) {
-		
-    }
-    
-    func netServiceDidResolveAddress(_ sender: NetService) {
-		
-    }
-    
-    func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) {
-		
-    }
-    
-    func netService(_ sender: NetService, didUpdateTXTRecord data: Data) {
-		
-    }
 	
-    func netServiceDidPublish(_ sender: NetService) {
-        //TODO: report to delegate
-        self.isListening = true
-        self.listenSemaphore.signal()
-    }
+	//MARK: - NetService Delegate
+	public func netServiceWillPublish(_ sender: NetService) {
+		
+	}
+	
+	public func netServiceWillResolve(_ sender: NetService) {
+		
+	}
+	
+	public func netServiceDidResolveAddress(_ sender: NetService) {
+		
+	}
+	
+	public func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) {
+		
+	}
+	
+	public func netService(_ sender: NetService, didUpdateTXTRecord data: Data) {
+		
+	}
+	
+	public func netServiceDidPublish(_ sender: NetService) {
+		//TODO: report to delegate
+		self.isListening = true
+		self.listenSemaphore.signal()
+	}
+	
+	public func netServiceDidStop(_ sender: NetService) {
+		//TODO: report to delegate
+		self.isListening = false
+	}
+	
+	public func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
+		//TODO: report to delegate
+		self.listenSemaphore.signal()
+	}
+	
+	public func netService(_ sender: NetService, didAcceptConnectionWith inputStream: InputStream, outputStream: OutputStream) {
+		self.readySemaphore.wait()
+		let pair:StreamPair = StreamPair.init(inputStream: inputStream, outputStream: outputStream)
+		let socket:NetServiceSocket = NetServiceSocket.init(withStreamPair: pair, acceptedBySocket: self)
+		self.newSocket = socket
+		self.condition.signal()
+	}
     
-    func netServiceDidStop(_ sender: NetService) {
-        //TODO: report to delegate
-        self.isListening = false
-    }
-    
-    func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
-        //TODO: report to delegate
-        self.listenSemaphore.signal()
-    }
-    
-    func netService(_ sender: NetService, didAcceptConnectionWith inputStream: InputStream, outputStream: OutputStream) {
-        self.readySemaphore.wait()
-        let pair:StreamPair = StreamPair.init(inputStream: inputStream, outputStream: outputStream)
-        let socket:NetServiceSocket = NetServiceSocket.init(withStreamPair: pair, acceptedBySocket: self)
-        self.newSocket = socket
-        self.condition.signal()
-    }
-    
-    func createReadDataSource(onQueue queue:DispatchQueue) throws -> DispatchSourceProtocol {
+    public func createReadDataSource(onQueue queue:DispatchQueue) throws -> DispatchSourceProtocol {
         return try self.streamPair().createReadDataSource(onQueue: queue)
     }
     
-    func createWriteDataSource(onQueue queue:DispatchQueue) throws -> DispatchSourceProtocol {
+    public func createWriteDataSource(onQueue queue:DispatchQueue) throws -> DispatchSourceProtocol {
         return try self.streamPair().createWriteDataSource(onQueue: queue)
     }
     
@@ -386,7 +386,7 @@ class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
     ///
     /// - Returns: Optional String
     ///
-    func readString() throws -> String? {
+    public func readString() throws -> String? {
         let pair:StreamPair = try self.streamPair()
         return try pair.readString()
     }
@@ -398,7 +398,7 @@ class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
     ///
     /// - Returns: Integer representing the number of bytes read.
     ///
-    func read(into data: inout Data) throws -> Int {
+    public func read(into data: inout Data) throws -> Int {
         let pair:StreamPair = try self.streamPair()
         return try pair.read(into: &data)
     }
@@ -410,7 +410,7 @@ class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
     ///
     /// - Returns: Integer representing the number of bytes read.
     ///
-    func read(into data: NSMutableData) throws -> Int {
+    public func read(into data: NSMutableData) throws -> Int {
         let pair:StreamPair = try self.streamPair()
         return try pair.read(into: data)
     }
@@ -421,7 +421,7 @@ class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
     ///
     /// - Parameter data: Data object containing the data to be written.
     ///
-    @discardableResult func write(from data: Data) throws -> Int {
+    @discardableResult public func write(from data: Data) throws -> Int {
         let pair:StreamPair = try self.streamPair()
         return try pair.write(from: data)
     }
@@ -431,7 +431,7 @@ class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
     ///
     /// - Parameter data: NSData object containing the data to be written.
     ///
-    @discardableResult func write(from data: NSData) throws -> Int {
+    @discardableResult public func write(from data: NSData) throws -> Int {
         let pair:StreamPair = try self.streamPair()
         return try pair.write(from: data)
     }
@@ -441,12 +441,12 @@ class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
     ///
     /// - Parameter string: String data to be written.
     ///
-    @discardableResult func write(from string: String) throws -> Int {
+    @discardableResult public func write(from string: String) throws -> Int {
         let pair:StreamPair = try self.streamPair()
         return try pair.write(from: string)
     }
     
-    @discardableResult func write(from buffer: UnsafeRawPointer, bufSize: Int) throws -> Int {
+    @discardableResult public func write(from buffer: UnsafeRawPointer, bufSize: Int) throws -> Int {
         let pair:StreamPair = try self.streamPair()
         return try pair.write(from: buffer, bufSize:bufSize)
     }
