@@ -261,7 +261,7 @@ public class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
     private(set) var pair:StreamPair?
     
     //MARK: - initializers
-    init(serverWithName name:String, type:String, domain:String, port:Int) {
+    public init(serverWithName name:String, type:String, domain:String, port:Int) {
         self.type = type
         self.domain = domain
         self.name = name
