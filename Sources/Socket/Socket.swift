@@ -33,66 +33,14 @@ import Foundation
 ///
 public class Socket: SocketReader, SocketWriter {
 
-	// MARK: Constants
-
-	// MARK: -- Generic
-
-	public static let SOCKET_MINIMUM_READ_BUFFER_SIZE		= 1024
-	public static let SOCKET_DEFAULT_READ_BUFFER_SIZE		= 4096
-	public static let SOCKET_DEFAULT_SSL_READ_BUFFER_SIZE	= 32768
-	public static let SOCKET_MAXIMUM_SSL_READ_BUFFER_SIZE	= 8000000
-	public static let SOCKET_DEFAULT_MAX_BACKLOG			= 50
-	#if os(macOS) || os(iOS) || os(tvOS)
-	public static let SOCKET_MAX_DARWIN_BACKLOG				= 128
-	#endif
-
-	public static let SOCKET_INVALID_PORT					= Int32(0)
-	public static let SOCKET_INVALID_DESCRIPTOR 			= Int32(-1)
-
-	public static let INADDR_ANY							= in_addr_t(0)
-
-	public static let NO_HOSTNAME							= "No hostname"
-
-	// MARK: -- Errors: Domain and Codes
-
-	public static let SOCKET_ERR_DOMAIN						= "com.ibm.oss.Socket.ErrorDomain"
-
-	public static let SOCKET_ERR_UNABLE_TO_CREATE_SOCKET    = -9999
-	public static let SOCKET_ERR_BAD_DESCRIPTOR				= -9998
-	public static let SOCKET_ERR_ALREADY_CONNECTED			= -9997
-	public static let SOCKET_ERR_NOT_CONNECTED				= -9996
-	public static let SOCKET_ERR_NOT_LISTENING				= -9995
-	public static let SOCKET_ERR_ACCEPT_FAILED				= -9994
-	public static let SOCKET_ERR_SETSOCKOPT_FAILED			= -9993
-	public static let SOCKET_ERR_BIND_FAILED				= -9992
-	public static let SOCKET_ERR_INVALID_HOSTNAME			= -9991
-	public static let SOCKET_ERR_INVALID_PORT				= -9990
-	public static let SOCKET_ERR_GETADDRINFO_FAILED			= -9989
-	public static let SOCKET_ERR_CONNECT_FAILED				= -9988
-	public static let SOCKET_ERR_MISSING_CONNECTION_DATA	= -9987
-	public static let SOCKET_ERR_SELECT_FAILED				= -9986
-	public static let SOCKET_ERR_LISTEN_FAILED				= -9985
-	public static let SOCKET_ERR_INVALID_BUFFER				= -9984
-	public static let SOCKET_ERR_INVALID_BUFFER_SIZE		= -9983
-	public static let SOCKET_ERR_RECV_FAILED				= -9982
-	public static let SOCKET_ERR_RECV_BUFFER_TOO_SMALL		= -9981
-	public static let SOCKET_ERR_WRITE_FAILED				= -9980
-	public static let SOCKET_ERR_GET_FCNTL_FAILED			= -9979
-	public static let SOCKET_ERR_SET_FCNTL_FAILED			= -9978
-	public static let SOCKET_ERR_NOT_IMPLEMENTED			= -9977
-	public static let SOCKET_ERR_NOT_SUPPORTED_YET			= -9976
-	public static let SOCKET_ERR_BAD_SIGNATURE_PARAMETERS	= -9975
-	public static let SOCKET_ERR_INTERNAL					= -9974
-	public static let SOCKET_ERR_WRONG_PROTOCOL				= -9973
-	public static let SOCKET_ERR_NOT_ACTIVE					= -9972
-	public static let SOCKET_ERR_CONNECTION_RESET			= -9971
-	public static let SOCKET_ERR_SET_RECV_TIMEOUT_FAILED	= -9970
-	public static let SOCKET_ERR_SET_WRITE_TIMEOUT_FAILED	= -9969
-	public static let SOCKET_ERR_CONNECT_TIMEOUT			= -9968
-	public static let SOCKET_ERR_GETSOCKOPT_FAILED			= -9967
-	public static let SOCKET_ERR_INVALID_DELEGATE_CALL		= -9966
-	public static let SOCKET_ERR_MISSING_SIGNATURE			= -9965
-	public static let SOCKET_ERR_PARAMETER_ERROR			= -9964
+	public typealias Signature = SocketSignature
+	public typealias Address = SocketSignature.Address
+	public typealias ProtocolFamily = SocketSignature.ProtocolFamily
+	public typealias SocketType = SocketSignature.SocketType
+	public typealias SocketProtocol = SocketSignature.SocketProtocol
+	public typealias Error = SocketError
+	public typealias ErrorConstants = SocketError.ErrorConstants
+	public typealias Defaults = SocketDefaults
 	
 	///
 	/// Specialized Operation Exception
@@ -113,649 +61,6 @@ public class Socket: SocketReader, SocketWriter {
 	///
 	public static let isLittleEndian: Bool 					= Int(littleEndian: 42) == 42
 
-	// MARK: Enums
-
-	// MARK: -- ProtocolFamily
-
-	///
-	/// Socket Protocol Family Values
-	///
-	/// **Note:** Only the following are supported at this time:
-	///			inet = AF_INET (IPV4)
-	///			inet6 = AF_INET6 (IPV6)
-	///			unix = AF_UNIX
-	///
-	public enum ProtocolFamily {
-
-		/// AF_INET (IPV4)
-		case inet
-
-		/// AF_INET6 (IPV6)
-		case inet6
-
-		/// AF_UNIX
-		case unix
-
-		///
-		/// Return the value for a particular case. (Readonly)
-		///
-		var value: Int32 {
-
-			switch self {
-
-			case .inet:
-				return Int32(AF_INET)
-
-			case .inet6:
-				return Int32(AF_INET6)
-
-			case .unix:
-				return Int32(AF_UNIX)
-			}
-		}
-		///
-		/// Return enum equivalent of a raw value
-		///
-		/// - Parameter forValue: Value for which enum value is desired
-		///
-		/// - Returns: Optional contain enum value or nil
-		///
-		static func getFamily(forValue: Int32) -> ProtocolFamily? {
-
-			switch forValue {
-
-			case Int32(AF_INET):
-				return .inet
-			case Int32(AF_INET6):
-				return .inet6
-			case Int32(AF_UNIX):
-				return .unix
-			default:
-				return nil
-			}
-		}
-
-	}
-
-	// MARK: -- SocketType
-
-	///
-	/// Socket Type Values
-	///
-	/// **Note:** Only the following are supported at this time:
-	///			stream = SOCK_STREAM (Provides sequenced, reliable, two-way, connection-based byte streams.)
-	///			datagram = SOCK_DGRAM (Supports datagrams (connectionless, unreliable messages of a fixed maximum length).)
-	///
-	public enum SocketType {
-
-		/// SOCK_STREAM (Provides sequenced, reliable, two-way, connection-based byte streams.)
-		case stream
-
-		/// SOCK_DGRAM (Supports datagrams (connectionless, unreliable messages of a fixed maximum length).)
-		case datagram
-
-		///
-		/// Return the value for a particular case. (Readonly)
-		///
-		var value: Int32 {
-
-			switch self {
-
-			case .stream:
-				#if os(Linux)
-					return Int32(SOCK_STREAM.rawValue)
-				#else
-					return SOCK_STREAM
-				#endif
-			case .datagram:
-				#if os(Linux)
-					return Int32(SOCK_DGRAM.rawValue)
-				#else
-					return SOCK_DGRAM
-				#endif
-			}
-		}
-
-		///
-		/// Return enum equivalent of a raw value
-		///
-		/// - Parameter forValue: Value for which enum value is desired
-		///
-		/// - Returns: Optional contain enum value or nil
-		///
-		static func getType(forValue: Int32) -> SocketType? {
-
-			#if os(Linux)
-				switch forValue {
-
-				case Int32(SOCK_STREAM.rawValue):
-					return .stream
-				case Int32(SOCK_DGRAM.rawValue):
-					return .datagram
-				default:
-					return nil
-				}
-			#else
-				switch forValue {
-
-				case SOCK_STREAM:
-					return .stream
-				case SOCK_DGRAM:
-					return .datagram
-				default:
-					return nil
-				}
-			#endif
-		}
-	}
-
-	// MARK: -- SocketProtocol
-
-	///
-	/// Socket Protocol Values
-	///
-	/// **Note:** Only the following are supported at this time:
-	///			tcp = IPPROTO_TCP
-	///			udp = IPPROTO_UDP
-	///			unix = Unix Domain Socket (raw value = 0)
-	///
-	public enum SocketProtocol: Int32 {
-
-		/// IPPROTO_TCP
-		case tcp
-
-		/// IPPROTO_UDP
-		case udp
-
-		/// Unix Domain
-		case unix
-
-		///
-		/// Return the value for a particular case. (Readonly)
-		///
-		var value: Int32 {
-
-			switch self {
-
-			case .tcp:
-				return Int32(IPPROTO_TCP)
-			case .udp:
-				return Int32(IPPROTO_UDP)
-			case .unix:
-				return Int32(0)
-			}
-		}
-
-		///
-		/// Return enum equivalent of a raw value
-		///
-		/// - Parameter forValue: Value for which enum value is desired
-		///
-		/// - Returns: Optional contain enum value or nil
-		///
-		static func getProtocol(forValue: Int32) -> SocketProtocol? {
-
-			switch forValue {
-
-			case Int32(IPPROTO_TCP):
-				return .tcp
-			case Int32(IPPROTO_UDP):
-				return .udp
-			case Int32(0):
-				return .unix
-			default:
-				return nil
-			}
-		}
-	}
-
-	// MARK: -- Socket Address
-
-	///
-	/// Socket Address
-	///
-	public enum Address {
-
-		/// sockaddr_in
-		case ipv4(sockaddr_in)
-
-		/// sockaddr_in6
-		case ipv6(sockaddr_in6)
-
-		/// sockaddr_un
-		case unix(sockaddr_un)
-
-		///
-		/// Size of address. (Readonly)
-		///
-		public var size: Int {
-
-			switch self {
-
-			case .ipv4( _):
-				return MemoryLayout<(sockaddr_in)>.size
-			case .ipv6( _):
-				return MemoryLayout<(sockaddr_in6)>.size
-			case .unix( _):
-				return MemoryLayout<(sockaddr_un)>.size
-			}
-		}
-		
-		public var family: ProtocolFamily {
-			switch self {
-			case .ipv4(_):
-				return ProtocolFamily.inet
-			case .ipv6(_):
-				return ProtocolFamily.inet6
-			case .unix(_):
-				return ProtocolFamily.unix
-			}
-		}
-	}
-
-	// MARK: Structs
-
-	// MARK: -- Signature
-
-	///
-	/// Socket signature: contains the characteristics of the socket.
-	///
-	public struct Signature: CustomStringConvertible {
-
-		// MARK: -- Public Properties
-
-		///
-		/// Protocol Family
-		///
-		public internal(set) var protocolFamily: ProtocolFamily
-
-		///
-		/// Socket Type. (Readonly)
-		///
-		public internal(set) var socketType: SocketType
-
-		///
-		/// Socket Protocol. (Readonly)
-		///
-		public internal(set) var proto: SocketProtocol
-
-		///
-		/// Host name for connection. (Readonly)
-		///
-		public internal(set) var hostname: String? = Socket.NO_HOSTNAME
-
-		///
-		/// Port for connection. (Readonly)
-		///
-		public internal(set) var port: Int32 = Socket.SOCKET_INVALID_PORT
-
-		///
-		/// Path for .unix type sockets. (Readonly)
-		public internal(set) var path: String? = nil
-
-		///
-		/// Address info for socket. (Readonly)
-		///
-		public internal(set) var address: Address? = nil
-
-		///
-		/// Flag to indicate whether `Socket` is secure or not. (Readonly)
-		///
-		public internal(set) var isSecure: Bool = false
-
-		///
-		/// True is socket bound, false otherwise.
-		///
-		public internal(set) var isBound: Bool = false
-
-		///
-		/// Returns a string description of the error.
-		///
-		public var description: String {
-
-			return "Signature: family: \(protocolFamily), type: \(socketType), protocol: \(proto), address: \(address as Socket.Address?), hostname: \(hostname as String?), port: \(port), path: \(String(describing: path)), bound: \(isBound), secure: \(isSecure)"
-		}
-
-		// MARK: -- Public Functions
-
-		///
-		/// Create a socket signature
-		///
-		/// - Parameters:
-		///		- protocolFamily:	The family of the socket to create.
-		///		- socketType:		The type of socket to create.
-		///		- proto:			The protocool to use for the socket.
-		/// 	- address:			Address info for the socket.
-		///
-		/// - Returns: New Signature instance
-		///
-		public init?(protocolFamily: Int32, socketType: Int32, proto: Int32, address: Address?) throws {
-
-			guard let family = ProtocolFamily.getFamily(forValue: protocolFamily),
-				let type = SocketType.getType(forValue: socketType),
-				let pro = SocketProtocol.getProtocol(forValue: proto) else {
-
-					throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Bad family, type or protocol passed.")
-			}
-
-			// Validate the parameters...
-			if type == .stream {
-				guard pro == .tcp || pro == .unix else {
-
-					throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Stream socket must use either .tcp or .unix for the protocol.")
-				}
-			}
-			if type == .datagram {
-				guard pro == .udp || pro == .unix else {
-
-					throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Datagram socket must use .udp or .unix for the protocol.")
-				}
-			}
-
-			self.protocolFamily = family
-			self.socketType = type
-			self.proto = pro
-
-			self.address = address
-
-		}
-
-		///
-		/// Create a socket signature
-		///
-		///	- Parameters:
-		///		- protocolFamily:	The protocol family to use (only `.inet` and `.inet6` supported by this `init` function).
-		///		- socketType:		The type of socket to create.
-		///		- proto:			The protocool to use for the socket.
-		/// 	- hostname:			Hostname for this signature.
-		/// 	- port:				Port for this signature.
-		///
-		/// - Returns: New Signature instance
-		///
-		public init?(protocolFamily: ProtocolFamily, socketType: SocketType, proto: SocketProtocol, hostname: String?, port: Int32?) throws {
-
-			// Make sure we have what we need...
-			guard let _ = hostname,
-				let port = port, protocolFamily == .inet || protocolFamily == .inet6 else {
-
-					throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Missing hostname, port or both or invalid protocol family.")
-			}
-
-			self.protocolFamily = protocolFamily
-
-			// Validate the parameters...
-			if socketType == .stream {
-				guard proto == .tcp || proto == .unix else {
-
-					throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Stream socket must use either .tcp or .unix for the protocol.")
-				}
-			}
-			if socketType == .datagram {
-				guard proto == .udp || proto == .unix else {
-
-					throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Datagram socket must use .udp or .unix for the protocol.")
-				}
-			}
-
-			self.socketType = socketType
-			self.proto = proto
-
-			self.hostname = hostname
-			self.port = port
-		}
-
-		///
-		/// Create a socket signature
-		///
-		///	- Parameters:
-		///		- socketType:		The type of socket to create.
-		///		- proto:			The protocool to use for the socket.
-		/// 	- path:				Pathname for this signature.
-		///
-		/// - Returns: New Signature instance
-		///
-		public init?(socketType: SocketType, proto: SocketProtocol, path: String?) throws {
-
-			// Make sure we have what we need...
-			guard let path = path, !path.isEmpty else {
-
-				throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Missing pathname.")
-			}
-
-			// Default to Unix socket protocol family...
-			self.protocolFamily = .unix
-
-			self.socketType = socketType
-			self.proto = proto
-
-			// Validate the parameters...
-			if socketType == .stream {
-				guard proto == .tcp || proto == .unix else {
-
-					throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Stream socket must use either .tcp or .unix for the protocol.")
-				}
-			}
-			if socketType == .datagram {
-				guard proto == .udp || proto == .unix else {
-
-					throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Datagram socket must use .udp or .unix for the protocol.")
-				}
-			}
-
-			self.path = path
-
-			// Create the address...
-			var remoteAddr = sockaddr_un()
-			remoteAddr.sun_family = sa_family_t(AF_UNIX)
-
-			let lengthOfPath = path.utf8.count
-
-			// Validate the length...
-			guard lengthOfPath < MemoryLayout.size(ofValue: remoteAddr.sun_path) else {
-
-				throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Pathname supplied is too long.")
-			}
-
-			var remote = remoteAddr.sun_path.0
-			_ = withUnsafeMutablePointer(to: &remote) { ptr in
-
-				let buf = UnsafeMutableBufferPointer(start: ptr, count: MemoryLayout.size(ofValue: remoteAddr.sun_path))
-				for (i, b) in path.utf8.enumerated() {
-					buf[i] = Int8(b)
-				}
-			}
-
-			#if !os(Linux)
-			    remoteAddr.sun_len = UInt8(MemoryLayout<UInt8>.size + MemoryLayout<sa_family_t>.size + path.utf8.count + 1)
-			#endif
-
-			self.address = .unix(remoteAddr)
-		}
-
-		///
-		/// Create a socket signature
-		///
-		/// - Parameters:
-		///		- protocolFamily:	The family of the socket to create.
-		///		- socketType:		The type of socket to create.
-		///		- proto:			The protocool to use for the socket.
-		/// 	- address:			Address info for the socket.
-		/// 	- hostname:			Hostname for this signature.
-		/// 	- port:				Port for this signature.
-		///
-		/// - Returns: New Signature instance
-		///
-		internal init?(protocolFamily: Int32, socketType: Int32, proto: Int32, address: Address?, hostname: String?, port: Int32?) throws {
-
-			// This constructor requires all items be present...
-			guard let family = ProtocolFamily.getFamily(forValue: protocolFamily),
-				let type = SocketType.getType(forValue: socketType),
-				let pro = SocketProtocol.getProtocol(forValue: proto),
-				let _ = hostname,
-				let port = port else {
-
-					throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Incomplete parameters.")
-			}
-
-			self.protocolFamily = family
-			self.socketType = type
-			self.proto = pro
-
-			// Validate the parameters...
-			if type == .stream {
-				guard pro == .tcp || pro == .unix else {
-
-					throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Stream socket must use either .tcp or .unix for the protocol.")
-				}
-			}
-			if type == .datagram {
-				guard pro == .udp else {
-
-					throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Datagram socket must use .udp for the protocol.")
-				}
-			}
-
-			self.address = address
-
-			self.hostname = hostname
-			self.port = port
-		}
-
-		///
-		///	Retrieve the UNIX address as an UnsafeMutablePointer
-		///
-		///	- Returns: Tuple containing the pointer plus the size.  **Needs to be deallocated after use.**
-		///
-		internal func unixAddress() throws -> (UnsafeMutablePointer<UInt8>, Int) {
-
-			// Throw an exception if the path is not set...
-			if path == nil {
-
-				throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Specified path contains zero (0) bytes.")
-			}
-
-			let utf8 = path!.utf8
-
-			// macOS has a size identifier in front, Linux does not...
-			#if os(Linux)
-				let addrLen = MemoryLayout<sockaddr_un>.size
-			#else
-				let addrLen = MemoryLayout<UInt8>.size + MemoryLayout<sa_family_t>.size + utf8.count + 1
-			#endif
-			let addrPtr = UnsafeMutablePointer<UInt8>.allocate(capacity: addrLen)
-
-			var memLoc = 0
-
-			// macOS uses one byte for sa_family_t, Linux uses two...
-			#if os(Linux)
-				let afUnixShort = UInt16(AF_UNIX)
-				addrPtr[memLoc] = UInt8(afUnixShort & 0xFF)
-				memLoc += 1
-				addrPtr[memLoc] = UInt8((afUnixShort >> 8) & 0xFF)
-				memLoc += 1
-			#else
-				addrPtr[memLoc] = UInt8(addrLen)
-				memLoc += 1
-				addrPtr[memLoc] = UInt8(AF_UNIX)
-				memLoc += 1
-			#endif
-
-			// Copy the pathname...
-			for char in utf8 {
-				addrPtr[memLoc] = char
-				memLoc += 1
-			}
-
-			addrPtr[memLoc] = 0
-
-			return (addrPtr, addrLen)
-		}
-
-	}
-
-	// MARK: -- Error
-
-	///
-	/// `Socket` specific error structure.
-	///
-	public struct Error: Swift.Error, CustomStringConvertible {
-
-		// MARK: -- Public Properties
-
-		///
-		/// The error domain.
-		///
-		public let domain: String = SOCKET_ERR_DOMAIN
-
-		///
-		/// The error code: **see constants above for possible errors** (Readonly)
-		///
-		public internal(set) var errorCode: Int32
-
-		///
-		/// The reason for the error **(if available)** (Readonly)
-		///
-		public internal(set) var errorReason: String?
-
-		///
-		/// Returns a string description of the error. (Readonly)
-		///
-		public var description: String {
-
-			let reason: String = self.errorReason ?? "Reason: Unavailable"
-			return "Error code: \(self.errorCode)(0x\(String(self.errorCode, radix: 16, uppercase: true))), \(reason)"
-		}
-
-		///
-		/// The buffer size needed to complete the read. (Readonly)
-		///
-		public internal(set) var bufferSizeNeeded: Int32
-
-		// MARK: -- Public Functions
-
-		///
-		/// Initializes an Error Instance
-		///
-		/// - Parameters:
-		///		- code:		Error code
-		/// 	- reason:	Optional Error Reason
-		///
-		/// - Returns: Error instance
-		///
-		init(code: Int, reason: String?) {
-
-			self.errorCode = Int32(code)
-			self.errorReason = reason
-			self.bufferSizeNeeded = 0
-		}
-
-		///
-		/// Initializes an Error Instance for a too small receive buffer error.
-		///
-		///	- Parameter bufferSize:	Required buffer size
-		///
-		///	- Returns: Error Instance
-		///
-		init(bufferSize: Int) {
-
-			self.init(code: Socket.SOCKET_ERR_RECV_BUFFER_TOO_SMALL, reason: "Socket has an invalid buffer, the size is too small")
-			self.bufferSizeNeeded = Int32(bufferSize)
-		}
-
-		///
-		/// Initializes an Error instance using SSLError
-		///
-		/// - Parameter error: SSLError instance to be transformed
-		///
-		/// - Returns: Error Instance
-		init(with error: SSLError) {
-
-			self.init(code: error.errCode, reason: error.description)
-		}
-	}
-
-	// MARK: Properties
-
 	// MARK: -- Private
 
 	///
@@ -763,12 +68,12 @@ public class Socket: SocketReader, SocketWriter {
 	/// 	**Note:** The readBuffer is actually allocating unmanaged memory that'll
 	///			be deallocated when we're done with it.
 	///
-	var readBuffer: UnsafeMutablePointer<CChar> = UnsafeMutablePointer<CChar>.allocate(capacity: Socket.SOCKET_DEFAULT_READ_BUFFER_SIZE)
+	var readBuffer: UnsafeMutablePointer<CChar> = UnsafeMutablePointer<CChar>.allocate(capacity: Socket.Defaults.SOCKET_DEFAULT_READ_BUFFER_SIZE)
 
 	///
 	/// Internal Storage Buffer initially created with `Socket.SOCKET_DEFAULT_READ_BUFFER_SIZE`.
 	///
-	var readStorage: NSMutableData = NSMutableData(capacity: Socket.SOCKET_DEFAULT_READ_BUFFER_SIZE)!
+	var readStorage: NSMutableData = NSMutableData(capacity: Socket.Defaults.SOCKET_DEFAULT_READ_BUFFER_SIZE)!
 	
 	///
 	/// True if a delegate accept is pending.
@@ -781,13 +86,13 @@ public class Socket: SocketReader, SocketWriter {
 	///
 	/// The file descriptor representing this socket. (Readonly)
 	///
-	public internal(set) var socketfd: Int32 = SOCKET_INVALID_DESCRIPTOR
+	public internal(set) var socketfd: Int32 = Defaults.SOCKET_INVALID_DESCRIPTOR
 
 	///
 	/// The signature for the socket. (Readonly)
 	/// 	**Note:** See Signature above.
 	///
-	public internal(set) var signature: Signature? = nil
+	public internal(set) var signature: SocketSignature? = nil
 
 	///
 	/// The delegate that provides the SSL implementation.
@@ -798,7 +103,7 @@ public class Socket: SocketReader, SocketWriter {
 
 			// If setting an SSL delegate, bump up the read buffer size...
 			if delegate != nil {
-				readBufferSize = Socket.SOCKET_DEFAULT_SSL_READ_BUFFER_SIZE
+				readBufferSize = Socket.Defaults.SOCKET_DEFAULT_SSL_READ_BUFFER_SIZE
 			}
 		}
 	}
@@ -811,15 +116,15 @@ public class Socket: SocketReader, SocketWriter {
 	///			to something smaller, it will be automatically set to the minimum
 	///			size as defined by `Socket.SOCKET_MINIMUM_READ_BUFFER_SIZE`.
 	///
-	public var readBufferSize: Int = Socket.SOCKET_DEFAULT_READ_BUFFER_SIZE {
+	public var readBufferSize: Int = Socket.Defaults.SOCKET_DEFAULT_READ_BUFFER_SIZE {
 
 		// If the buffer size changes we need to reallocate the buffer...
 		didSet {
 
 			// Ensure minimum buffer size...
-			if readBufferSize < Socket.SOCKET_MINIMUM_READ_BUFFER_SIZE {
+			if readBufferSize < Socket.Defaults.SOCKET_MINIMUM_READ_BUFFER_SIZE {
 
-				readBufferSize = Socket.SOCKET_MINIMUM_READ_BUFFER_SIZE
+				readBufferSize = Socket.Defaults.SOCKET_MINIMUM_READ_BUFFER_SIZE
 			}
 
 			if readBufferSize != oldValue {
@@ -843,7 +148,7 @@ public class Socket: SocketReader, SocketWriter {
 	/// Maximum size of the queue containing pending connections.
 	///		**Note:** Default value is `Socket.SOCKET_DEFAULT_MAX_BACKLOG`
 	///
-	public var maxBacklogSize: Int = Socket.SOCKET_DEFAULT_MAX_BACKLOG
+	public var maxBacklogSize: Int = Socket.Defaults.SOCKET_DEFAULT_MAX_BACKLOG
 
 	///
 	/// True if this socket is connected. False otherwise. (Readonly)
@@ -911,7 +216,7 @@ public class Socket: SocketReader, SocketWriter {
 
 		guard let sig = signature,
 			let host = sig.hostname else {
-				return Socket.NO_HOSTNAME
+				return Socket.Defaults.NO_HOSTNAME
 		}
 
 		return host
@@ -922,8 +227,8 @@ public class Socket: SocketReader, SocketWriter {
 	///
 	public var remotePort: Int32 {
 
-		guard let sig = signature, sig.port != Socket.SOCKET_INVALID_PORT else {
-			return Socket.SOCKET_INVALID_PORT
+		guard let sig = signature, sig.port != Socket.Defaults.SOCKET_INVALID_PORT else {
+			return Socket.Defaults.SOCKET_INVALID_PORT
 		}
 
 		return sig.port
@@ -962,13 +267,13 @@ public class Socket: SocketReader, SocketWriter {
 		if type == .stream {
 			guard proto == .tcp || proto == .unix else {
 
-				throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Stream socket must use either .tcp or .unix for the protocol.")
+				throw Error(code: ErrorConstants.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Stream socket must use either .tcp or .unix for the protocol.")
 			}
 		}
 		if type == .datagram {
 			guard proto == .udp || proto == .unix else {
 
-				throw Error(code: Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Datagram socket must use .udp or .unix for the protocol.")
+				throw Error(code: ErrorConstants.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Datagram socket must use .udp or .unix for the protocol.")
 			}
 		}
 
@@ -1004,7 +309,7 @@ public class Socket: SocketReader, SocketWriter {
 
 		guard let addr = address else {
 
-			throw Error(code: Socket.SOCKET_ERR_MISSING_CONNECTION_DATA, reason: "Unable to access socket connection data.")
+			throw Error(code: ErrorConstants.SOCKET_ERR_MISSING_CONNECTION_DATA, reason: "Unable to access socket connection data.")
 		}
 
 		return try Socket(fd: nativeHandle, remoteAddress: addr)
@@ -1100,17 +405,17 @@ public class Socket: SocketReader, SocketWriter {
 		// Validate we have sockets to look for and they are valid...
 		for socket in sockets {
 
-			if socket.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+			if socket.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-				throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "The socket has an invalid descriptor")
+				throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "The socket has an invalid descriptor")
 			}
 			if socket.signature == nil {
 				
-				throw Error(code: Socket.SOCKET_ERR_MISSING_SIGNATURE, reason: "The socket is missing a signature")
+				throw Error(code: ErrorConstants.SOCKET_ERR_MISSING_SIGNATURE, reason: "The socket is missing a signature")
 			}
 			if !socket.isActive && !socket.signature!.isBound {
 
-				throw Error(code: Socket.SOCKET_ERR_NOT_ACTIVE, reason: "The socket is not active")
+				throw Error(code: ErrorConstants.SOCKET_ERR_NOT_ACTIVE, reason: "The socket is not active")
 			}
 		}
 
@@ -1160,7 +465,7 @@ public class Socket: SocketReader, SocketWriter {
 		// A count of less than zero indicates select failed...
 		if count < 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_SELECT_FAILED, reason: String(validatingUTF8: strerror(errno)) ?? "Error: \(errno)")
+			throw Error(code: ErrorConstants.SOCKET_ERR_SELECT_FAILED, reason: String(validatingUTF8: strerror(errno)) ?? "Error: \(errno)")
 		}
 
 		// A count equal zero, indicates we timed out...
@@ -1260,8 +565,8 @@ public class Socket: SocketReader, SocketWriter {
 		// If error, throw an appropriate exception...
 		if self.socketfd < 0 {
 
-			self.socketfd = Socket.SOCKET_INVALID_DESCRIPTOR
-			throw Error(code: Socket.SOCKET_ERR_UNABLE_TO_CREATE_SOCKET, reason: self.lastError())
+			self.socketfd = Socket.Defaults.SOCKET_INVALID_DESCRIPTOR
+			throw Error(code: ErrorConstants.SOCKET_ERR_UNABLE_TO_CREATE_SOCKET, reason: self.lastError())
 		}
 
 		try self.ignoreSIGPIPE(on: self.socketfd)
@@ -1363,23 +668,23 @@ public class Socket: SocketReader, SocketWriter {
     public func acceptClientConnection(invokeDelegate: Bool = true) throws -> Socket {
 
 		// The socket must've been created, not connected and listening...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "The socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "The socket has an invalid descriptor")
 		}
 
 		if self.isConnected {
 
-			throw Error(code: Socket.SOCKET_ERR_ALREADY_CONNECTED, reason: "The socket is not connected")
+			throw Error(code: ErrorConstants.SOCKET_ERR_ALREADY_CONNECTED, reason: "The socket is not connected")
 		}
 
 		if !self.isListening {
 
-			throw Error(code: Socket.SOCKET_ERR_NOT_LISTENING, reason: "The socket is not listening")
+			throw Error(code: ErrorConstants.SOCKET_ERR_NOT_LISTENING, reason: "The socket is not listening")
 		}
 
 		// Accept the remote connection...
-		var socketfd2: Int32 = Socket.SOCKET_INVALID_DESCRIPTOR
+		var socketfd2: Int32 = Socket.Defaults.SOCKET_INVALID_DESCRIPTOR
 		var address: Address? = nil
 
 		var keepRunning: Bool = true
@@ -1402,11 +707,11 @@ public class Socket: SocketReader, SocketWriter {
 						// Note: if you're running tests inside Xcode and the tests stop on this line
 						//  and the tests fail, but they work if you run `swift test` on the
 						//  command line, Hit `Deactivate Breakpoints` in Xcode and try again
-						throw Error(code: Socket.SOCKET_ERR_ACCEPT_FAILED, reason: self.lastError())
+						throw Error(code: ErrorConstants.SOCKET_ERR_ACCEPT_FAILED, reason: self.lastError())
 					}
 					socketfd2 = fd
 				}) else {
-					throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "Unable to determine incoming socket protocol family.")
+					throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "Unable to determine incoming socket protocol family.")
 				}
 				address = acceptAddress
 				
@@ -1449,7 +754,7 @@ public class Socket: SocketReader, SocketWriter {
 		// Only allow this if the socket needs it, otherwise it's a error...
 		if !newSocket.needsAcceptDelegateCall {
 			
-			throw Error(code: Socket.SOCKET_ERR_INVALID_DELEGATE_CALL, reason: "Socket does not need a delegate accept call")
+			throw Error(code: ErrorConstants.SOCKET_ERR_INVALID_DELEGATE_CALL, reason: "Socket does not need a delegate accept call")
 		}
 		
 		do {
@@ -1476,23 +781,23 @@ public class Socket: SocketReader, SocketWriter {
 	public func acceptConnection() throws {
 
 		// The socket must've been created, not connected and listening...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		if self.isConnected {
 
-			throw Error(code: Socket.SOCKET_ERR_ALREADY_CONNECTED, reason: "Socket is not connected")
+			throw Error(code: ErrorConstants.SOCKET_ERR_ALREADY_CONNECTED, reason: "Socket is not connected")
 		}
 
 		if !self.isListening {
 
-			throw Error(code: Socket.SOCKET_ERR_NOT_LISTENING, reason: "Socket is not listening")
+			throw Error(code: ErrorConstants.SOCKET_ERR_NOT_LISTENING, reason: "Socket is not listening")
 		}
 
 		// Accept the remote connection...
-		var socketfd2: Int32 = Socket.SOCKET_INVALID_DESCRIPTOR
+		var socketfd2: Int32 = Socket.Defaults.SOCKET_INVALID_DESCRIPTOR
 		var address: Address? = nil
 
 		var keepRunning: Bool = true
@@ -1515,11 +820,11 @@ public class Socket: SocketReader, SocketWriter {
 						// Note: if you're running tests inside Xcode and the tests stop on this line
 						//  and the tests fail, but they work if you run `swift test` on the
 						//  command line, Hit `Deactivate Breakpoints` in Xcode and try again
-						throw Error(code: Socket.SOCKET_ERR_ACCEPT_FAILED, reason: self.lastError())
+						throw Error(code: ErrorConstants.SOCKET_ERR_ACCEPT_FAILED, reason: self.lastError())
 					}
 					socketfd2 = fd
 				}) else {
-					throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "Unable to determine incoming socket protocol family.")
+					throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "Unable to determine incoming socket protocol family.")
 				}
 				address = acceptAddress
 				
@@ -1598,29 +903,29 @@ public class Socket: SocketReader, SocketWriter {
 	public func connect(to host: String, port: Int32, timeout: UInt = 0, familyOnly: Bool = false) throws {
 
 		// The socket must've been created and must not be connected...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		if self.isConnected {
 
-			throw Error(code: Socket.SOCKET_ERR_ALREADY_CONNECTED, reason: "Socket is not connected")
+			throw Error(code: ErrorConstants.SOCKET_ERR_ALREADY_CONNECTED, reason: "Socket is not connected")
 		}
 
 		if host.utf8.count == 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_INVALID_HOSTNAME, reason: "Socket has an invalid hostname")
+			throw Error(code: ErrorConstants.SOCKET_ERR_INVALID_HOSTNAME, reason: "Socket has an invalid hostname")
 		}
 		
 		if !self.isBlocking && timeout == 0 {
 			
-			throw Error(code: Socket.SOCKET_ERR_PARAMETER_ERROR, reason: "No timeout set on call for non-blocking socket.")
+			throw Error(code: ErrorConstants.SOCKET_ERR_PARAMETER_ERROR, reason: "No timeout set on call for non-blocking socket.")
 		}
 
 		if port == 0 || port > 65535 {
 
-			throw Error(code: Socket.SOCKET_ERR_INVALID_PORT, reason: "The port specified is invalid. Must be in the range of 1-65535.")
+			throw Error(code: ErrorConstants.SOCKET_ERR_INVALID_PORT, reason: "The port specified is invalid. Must be in the range of 1-65535.")
 		}
 		
 		// Tell the delegate to initialize as a client...
@@ -1674,7 +979,7 @@ public class Socket: SocketReader, SocketWriter {
 			} else {
 				errorString = String(validatingUTF8: gai_strerror(status)) ?? "Unknown error code."
 			}
-			throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: errorString)
+			throw Error(code: ErrorConstants.SOCKET_ERR_GETADDRINFO_FAILED, reason: errorString)
 		}
 
 		// Defer cleanup of our target info...
@@ -1689,7 +994,7 @@ public class Socket: SocketReader, SocketWriter {
 		defer {
 			// if we throw an error, be sure we clean up any dangling socket properly.
 			// note that we set this variable to nil when we assign the socket to `self.socketfd`.
-			if let sock = socketDescriptor, sock != Socket.SOCKET_INVALID_DESCRIPTOR {
+			if let sock = socketDescriptor, sock != Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 				#if os(Linux)
 					_ = Glibc.close(socketDescriptor!)
 				#else
@@ -1717,13 +1022,13 @@ public class Socket: SocketReader, SocketWriter {
 				let flags = fcntl(socketDescriptor!, F_GETFL)
 				if flags < 0 {
 					
-					throw Error(code: Socket.SOCKET_ERR_GET_FCNTL_FAILED, reason: self.lastError())
+					throw Error(code: ErrorConstants.SOCKET_ERR_GET_FCNTL_FAILED, reason: self.lastError())
 				}
 				
 				let result = fcntl(socketDescriptor!, F_SETFL, flags | O_NONBLOCK)
 				if result < 0 {
 					
-					throw Error(code: Socket.SOCKET_ERR_SET_FCNTL_FAILED, reason: self.lastError())
+					throw Error(code: ErrorConstants.SOCKET_ERR_SET_FCNTL_FAILED, reason: self.lastError())
 				}
 			}
 
@@ -1771,7 +1076,7 @@ public class Socket: SocketReader, SocketWriter {
 					let count = select(socketDescriptor! + Int32(1), nil, &writefds, nil, &timer)
 					if count < 0 {
 						
-						throw Error(code: Socket.SOCKET_ERR_SELECT_FAILED, reason: self.lastError())
+						throw Error(code: ErrorConstants.SOCKET_ERR_SELECT_FAILED, reason: self.lastError())
 					}
 					
 					// If the socket is writable, we're probably connected, but check anyway to be sure...
@@ -1783,7 +1088,7 @@ public class Socket: SocketReader, SocketWriter {
 						var resultLength = socklen_t(MemoryLayout<Int>.size)
 						if getsockopt(socketDescriptor!, SOL_SOCKET, SO_ERROR, &result, &resultLength) < 0 {
 							
-							throw Error(code: Socket.SOCKET_ERR_GETSOCKOPT_FAILED, reason: self.lastError())
+							throw Error(code: ErrorConstants.SOCKET_ERR_GETSOCKOPT_FAILED, reason: self.lastError())
 						}
 						
 						// Check the result of the socket connect...
@@ -1796,7 +1101,7 @@ public class Socket: SocketReader, SocketWriter {
 					
 					} else {
 						
-						throw Error(code: Socket.SOCKET_ERR_CONNECT_TIMEOUT, reason: self.lastError())
+						throw Error(code: ErrorConstants.SOCKET_ERR_CONNECT_TIMEOUT, reason: self.lastError())
 					}
 				}
 			}
@@ -1821,11 +1126,11 @@ public class Socket: SocketReader, SocketWriter {
 					_ = Darwin.close(socketDescriptor!)
 				#endif
 			}
-			throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: self.lastError())
+			throw Error(code: ErrorConstants.SOCKET_ERR_GETADDRINFO_FAILED, reason: self.lastError())
 		}
 
 		// Close the existing socket (if open) before replacing it...
-		if self.socketfd != Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd != Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
 			self.close(withSSLCleanup: false)
 		}
@@ -1849,7 +1154,7 @@ public class Socket: SocketReader, SocketWriter {
 
 		} else {
 
-			throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "Unable to determine connected socket protocol family.")
+			throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "Unable to determine connected socket protocol family.")
 		}
 
 		try self.ignoreSIGPIPE(on: self.socketfd)
@@ -1870,13 +1175,13 @@ public class Socket: SocketReader, SocketWriter {
 			let flags = fcntl(self.socketfd, F_GETFL)
 			if flags < 0 {
 				
-				throw Error(code: Socket.SOCKET_ERR_GET_FCNTL_FAILED, reason: self.lastError())
+				throw Error(code: ErrorConstants.SOCKET_ERR_GET_FCNTL_FAILED, reason: self.lastError())
 			}
 			
 			let result = fcntl(self.socketfd, F_SETFL, flags & ~O_NONBLOCK)
 			if result < 0 {
 				
-				throw Error(code: Socket.SOCKET_ERR_SET_FCNTL_FAILED, reason: self.lastError())
+				throw Error(code: ErrorConstants.SOCKET_ERR_SET_FCNTL_FAILED, reason: self.lastError())
 			}
 		}
 
@@ -1909,25 +1214,25 @@ public class Socket: SocketReader, SocketWriter {
 		// Make sure this is a UNIX socket...
 		guard let sig = self.signature, sig.protocolFamily == .unix else {
 
-			throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "Socket has the wrong protocol, it must be UNIX socket")
+			throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "Socket has the wrong protocol, it must be UNIX socket")
 		}
 
 		// The socket must've been created and must not be connected...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		if self.isConnected {
 
-			throw Error(code: Socket.SOCKET_ERR_ALREADY_CONNECTED, reason: "Socket is not connected")
+			throw Error(code: ErrorConstants.SOCKET_ERR_ALREADY_CONNECTED, reason: "Socket is not connected")
 		}
 
 		// Create the signature...
 		self.signature = try Signature(socketType: .stream, proto: .unix, path: path)
 		guard let signature = self.signature else {
 
-			throw Error(code: Socket.SOCKET_ERR_MISSING_CONNECTION_DATA, reason: "Unable to access connection data.")
+			throw Error(code: ErrorConstants.SOCKET_ERR_MISSING_CONNECTION_DATA, reason: "Unable to access connection data.")
 		}
 
 		// Now, do the connection using the supplied address...
@@ -1952,7 +1257,7 @@ public class Socket: SocketReader, SocketWriter {
 		}
 		if rc < 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_CONNECT_FAILED, reason: self.lastError())
+			throw Error(code: ErrorConstants.SOCKET_ERR_CONNECT_FAILED, reason: self.lastError())
 		}
 
 		self.isConnected = true
@@ -1966,9 +1271,9 @@ public class Socket: SocketReader, SocketWriter {
 	public func connect(using signature: Signature) throws {
 
 		// Make sure we've got a valid socket...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		// Ensure we've got a proper address...
@@ -1979,20 +1284,20 @@ public class Socket: SocketReader, SocketWriter {
 			return
 		}
 
-		if signature.hostname == nil || signature.port == Socket.SOCKET_INVALID_PORT {
+		if signature.hostname == nil || signature.port == Socket.Defaults.SOCKET_INVALID_PORT {
 
 			guard let _ = signature.address else {
 
-				throw Error(code: Socket.SOCKET_ERR_MISSING_CONNECTION_DATA, reason: "Unable to access connection data.")
+				throw Error(code: ErrorConstants.SOCKET_ERR_MISSING_CONNECTION_DATA, reason: "Unable to access connection data.")
 			}
 
 		} else {
 
 			// Otherwise, make sure we've got a hostname and port...
 			guard let hostname = signature.hostname,
-				signature.port != Socket.SOCKET_INVALID_PORT else {
+				signature.port != Socket.Defaults.SOCKET_INVALID_PORT else {
 
-					throw Error(code: Socket.SOCKET_ERR_MISSING_CONNECTION_DATA, reason: "Unable to access hostname and port.")
+					throw Error(code: ErrorConstants.SOCKET_ERR_MISSING_CONNECTION_DATA, reason: "Unable to access hostname and port.")
 			}
 
 			// Connect using hostname and port....
@@ -2026,7 +1331,7 @@ public class Socket: SocketReader, SocketWriter {
 		
 		if rc < 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_CONNECT_FAILED, reason: self.lastError())
+			throw Error(code: ErrorConstants.SOCKET_ERR_CONNECT_FAILED, reason: self.lastError())
 		}
 
 		if let (hostname, port) = Socket.hostnameAndPort(from: signature.address!) {
@@ -2069,12 +1374,12 @@ public class Socket: SocketReader, SocketWriter {
 	/// 	- maxBacklogSize: 		The maximum size of the queue containing pending connections. Default is *Socket.SOCKET_DEFAULT_MAX_BACKLOG*.
 	///		- allowPortReuse:		Set to `true` to allow the port to be reused. `false` otherwise. Default is `true`.
 	///
-	public func listen(on port: Int, maxBacklogSize: Int = Socket.SOCKET_DEFAULT_MAX_BACKLOG, allowPortReuse: Bool = true) throws {
+	public func listen(on port: Int, maxBacklogSize: Int = Socket.Defaults.SOCKET_DEFAULT_MAX_BACKLOG, allowPortReuse: Bool = true) throws {
 
 		// Make sure we've got a valid socket...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		// Set a flag so that this address can be re-used immediately after the connection
@@ -2082,7 +1387,7 @@ public class Socket: SocketReader, SocketWriter {
 		var on: Int32 = 1
 		if setsockopt(self.socketfd, SOL_SOCKET, SO_REUSEADDR, &on, socklen_t(MemoryLayout<Int32>.size)) < 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
+			throw Error(code: ErrorConstants.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
 		}
 
 		// Allow port reuse if the caller desires...
@@ -2097,7 +1402,7 @@ public class Socket: SocketReader, SocketWriter {
 				// Setting of this option on WSL (Windows Subsytem for Linux) is not supported.  Check for
 				// the appropriate errno value and if set, ignore the error...
 				if errno != ENOPROTOOPT {
-					throw Error(code: Socket.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
+					throw Error(code: ErrorConstants.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
 				}
 			}
 		}
@@ -2105,14 +1410,14 @@ public class Socket: SocketReader, SocketWriter {
 		// Get the signature for the socket...
 		guard let sig = self.signature else {
 
-			throw Error(code: Socket.SOCKET_ERR_INTERNAL, reason: "Socket signature not found.")
+			throw Error(code: ErrorConstants.SOCKET_ERR_INTERNAL, reason: "Socket signature not found.")
 		}
 
         // Configure ipv6 socket so that it can share ports with ipv4 on the same port.
         if sig.protocolFamily == .inet6 && sig.proto == .tcp {
             if setsockopt(self.socketfd, Int32(IPPROTO_IPV6), IPV6_V6ONLY, &on, socklen_t(MemoryLayout<Int32>.size)) < 0 {
 
-                throw Error(code: Socket.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
+                throw Error(code: ErrorConstants.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
             }
         }
 
@@ -2170,7 +1475,7 @@ public class Socket: SocketReader, SocketWriter {
 			} else {
 				errorString = String(validatingUTF8: gai_strerror(errno)) ?? "Unknown error code."
 			}
-			throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: errorString)
+			throw Error(code: ErrorConstants.SOCKET_ERR_GETADDRINFO_FAILED, reason: errorString)
 		}
 
 		// Defer cleanup of our target info...
@@ -2210,7 +1515,7 @@ public class Socket: SocketReader, SocketWriter {
 		// Throw an error if we weren't able to bind to an address...
 		if !bound {
 
-			throw Error(code: Socket.SOCKET_ERR_BIND_FAILED, reason: self.lastError())
+			throw Error(code: ErrorConstants.SOCKET_ERR_BIND_FAILED, reason: self.lastError())
 		}
 
 		// Save the address info...
@@ -2220,10 +1525,10 @@ public class Socket: SocketReader, SocketWriter {
 		if port == 0 {
 			guard let addressFromSockName = try Address(addressProvider: { (sockaddr, length) in
 				if getsockname(self.socketfd, sockaddr, length) != 0 {
-					throw Error(code: Socket.SOCKET_ERR_BIND_FAILED, reason: "Unable to determine listening socket address after bind.")
+					throw Error(code: ErrorConstants.SOCKET_ERR_BIND_FAILED, reason: "Unable to determine listening socket address after bind.")
 				}
 			}) else {
-				throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "Unable to determine listening socket protocol family.")
+				throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "Unable to determine listening socket protocol family.")
 			}
 			address = addressFromSockName
 		} else {
@@ -2242,7 +1547,7 @@ public class Socket: SocketReader, SocketWriter {
 
 			} else {
 
-				throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "Unable to determine listening socket protocol family.")
+				throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "Unable to determine listening socket protocol family.")
 			}
 
 		}
@@ -2270,7 +1575,7 @@ public class Socket: SocketReader, SocketWriter {
 		#else
 			if Darwin.listen(self.socketfd, Int32(maxBacklogSize)) < 0 {
 
-				throw Error(code: Socket.SOCKET_ERR_LISTEN_FAILED, reason: self.lastError())
+				throw Error(code: ErrorConstants.SOCKET_ERR_LISTEN_FAILED, reason: self.lastError())
 			}
 		#endif
 
@@ -2287,18 +1592,18 @@ public class Socket: SocketReader, SocketWriter {
 	///		- path: 				The path to listen on.
 	/// 	- maxBacklogSize: 		The maximum size of the queue containing pending connections. Default is *Socket.SOCKET_DEFAULT_MAX_BACKLOG*.
 	///
-	public func listen(on path: String, maxBacklogSize: Int = Socket.SOCKET_DEFAULT_MAX_BACKLOG) throws {
+	public func listen(on path: String, maxBacklogSize: Int = Socket.Defaults.SOCKET_DEFAULT_MAX_BACKLOG) throws {
 
 		// Make sure we've got a valid socket...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		// Make sure this is a UNIX socket...
 		guard let sockSig = self.signature, sockSig.protocolFamily == .unix else {
 
-			throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "Socket has the wrong protocol, it must be a UNIX socket")
+			throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "Socket has the wrong protocol, it must be a UNIX socket")
 		}
 
 		// Set a flag so that this address can be re-used immediately after the connection
@@ -2306,14 +1611,14 @@ public class Socket: SocketReader, SocketWriter {
 		var on: Int32 = 1
 		if setsockopt(self.socketfd, SOL_SOCKET, SO_REUSEADDR, &on, socklen_t(MemoryLayout<Int32>.size)) < 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
+			throw Error(code: ErrorConstants.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
 		}
 
 		// Create the signature...
 		let sig = try Signature(socketType: .stream, proto: .unix, path: path)
 		guard let signature = sig else {
 
-			throw Error(code:Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Socket contains invalid signature parameters")
+			throw SocketError(code:ErrorConstants.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Socket contains invalid signature parameters")
 		}
 
 		// Ensure the path doesn't exist...
@@ -2347,7 +1652,7 @@ public class Socket: SocketReader, SocketWriter {
 
 		if rc < 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_LISTEN_FAILED, reason: self.lastError())
+			throw Error(code: ErrorConstants.SOCKET_ERR_LISTEN_FAILED, reason: self.lastError())
 		}
 
 		// Now listen for connections...
@@ -2359,7 +1664,7 @@ public class Socket: SocketReader, SocketWriter {
 		#else
 			if Darwin.listen(self.socketfd, Int32(maxBacklogSize)) < 0 {
 
-				throw Error(code: Socket.SOCKET_ERR_LISTEN_FAILED, reason: self.lastError())
+				throw Error(code: ErrorConstants.SOCKET_ERR_LISTEN_FAILED, reason: self.lastError())
 			}
 		#endif
 
@@ -2383,25 +1688,25 @@ public class Socket: SocketReader, SocketWriter {
 	///
 	///	- Returns:				Tuple containing the number of bytes read and the `Address` of the client who sent the data.
 	///
-	public func listen(forMessage buffer: UnsafeMutablePointer<CChar>, bufSize: Int, on port: Int, maxBacklogSize: Int = Socket.SOCKET_DEFAULT_MAX_BACKLOG) throws -> (bytesRead: Int, address: Address?) {
+	public func listen(forMessage buffer: UnsafeMutablePointer<CChar>, bufSize: Int, on port: Int, maxBacklogSize: Int = Socket.Defaults.SOCKET_DEFAULT_MAX_BACKLOG) throws -> (bytesRead: Int, address: Address?) {
 
 		// Make sure the buffer is valid...
 		if bufSize == 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_INVALID_BUFFER, reason: "Socket has an invalid buffer, the size is zero")
+			throw Error(code: ErrorConstants.SOCKET_ERR_INVALID_BUFFER, reason: "Socket has an invalid buffer, the size is zero")
 		}
 
 		// The socket must've been created...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		// The socket must've been created for UDP...
 		guard let sig = self.signature,
 			sig.socketType == .datagram else {
 
-				throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
+				throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
 		}
 
 		// Set up the socket for listening for a message unless we're already set up...
@@ -2412,7 +1717,7 @@ public class Socket: SocketReader, SocketWriter {
 		// If we're not bound, something went wrong...
 		guard self.signature?.isBound == true else {
 
-			throw Error(code: Socket.SOCKET_ERR_LISTEN_FAILED, reason: "")
+			throw Error(code: ErrorConstants.SOCKET_ERR_LISTEN_FAILED, reason: "")
 		}
 
 		self.isListening = true
@@ -2430,19 +1735,19 @@ public class Socket: SocketReader, SocketWriter {
 	///
 	///	- Returns:				Tuple containing the number of bytes read and the `Address` of the client who sent the data.
 	///
-	public func listen(forMessage data: NSMutableData, on port: Int, maxBacklogSize: Int = Socket.SOCKET_DEFAULT_MAX_BACKLOG) throws -> (bytesRead: Int, address: Address?) {
+	public func listen(forMessage data: NSMutableData, on port: Int, maxBacklogSize: Int = Socket.Defaults.SOCKET_DEFAULT_MAX_BACKLOG) throws -> (bytesRead: Int, address: Address?) {
 
 		// The socket must've been created...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		// The socket must've been created for UDP...
 		guard let sig = self.signature,
 			sig.socketType == .datagram && sig.proto == .udp else {
 
-				throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
+				throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
 		}
 
 		// Set up the socket for listening for a message unless we're already set up...
@@ -2453,7 +1758,7 @@ public class Socket: SocketReader, SocketWriter {
 		// If we're not bound, something went wrong...
 		guard self.signature?.isBound == true else {
 
-			throw Error(code: Socket.SOCKET_ERR_LISTEN_FAILED, reason: "")
+			throw Error(code: ErrorConstants.SOCKET_ERR_LISTEN_FAILED, reason: "")
 		}
 
 		self.isListening = true
@@ -2471,19 +1776,19 @@ public class Socket: SocketReader, SocketWriter {
 	///
 	///	- Returns:				Tuple containing the number of bytes read and the `Address` of the client who sent the data.
 	///
-	public func listen(forMessage data: inout Data, on port: Int, maxBacklogSize: Int = Socket.SOCKET_DEFAULT_MAX_BACKLOG) throws -> (bytesRead: Int, address: Address?) {
+	public func listen(forMessage data: inout Data, on port: Int, maxBacklogSize: Int = Socket.Defaults.SOCKET_DEFAULT_MAX_BACKLOG) throws -> (bytesRead: Int, address: Address?) {
 
 		// The socket must've been created...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		// The socket must've been created for UDP...
 		guard let sig = self.signature,
 			sig.socketType == .datagram else {
 
-				throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
+				throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
 		}
 
 		// Set up the socket for listening for a message unless we're already set up...
@@ -2494,7 +1799,7 @@ public class Socket: SocketReader, SocketWriter {
 		// If we're not bound, something went wrong...
 		guard self.signature?.isBound == true else {
 
-			throw Error(code: Socket.SOCKET_ERR_LISTEN_FAILED, reason: "")
+			throw Error(code: ErrorConstants.SOCKET_ERR_LISTEN_FAILED, reason: "")
 		}
 
 		self.isListening = true
@@ -2526,18 +1831,18 @@ public class Socket: SocketReader, SocketWriter {
 		// Make sure the buffer is valid...
 		if bufSize == 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_INVALID_BUFFER, reason: "Socket has an invalid buffer, the size is zero")
+			throw Error(code: ErrorConstants.SOCKET_ERR_INVALID_BUFFER, reason: "Socket has an invalid buffer, the size is zero")
 		}
 
 		// The socket must've been created and must be connected...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		if !self.isConnected {
 
-			throw Error(code: Socket.SOCKET_ERR_NOT_CONNECTED, reason: "Socket is not connected")
+			throw Error(code: ErrorConstants.SOCKET_ERR_NOT_CONNECTED, reason: "Socket is not connected")
 		}
 
 		// See if we have cached data to send back...
@@ -2633,7 +1938,7 @@ public class Socket: SocketReader, SocketWriter {
 
 		guard let data = NSMutableData(capacity: 2000) else {
 
-			throw Error(code: Socket.SOCKET_ERR_INTERNAL, reason: "Unable to create temporary NSMutableData...")
+			throw Error(code: ErrorConstants.SOCKET_ERR_INTERNAL, reason: "Unable to create temporary NSMutableData...")
 		}
 
 		let rc = try self.read(into: data)
@@ -2641,7 +1946,7 @@ public class Socket: SocketReader, SocketWriter {
 		guard let str = NSString(bytes: data.bytes, length: data.length, encoding: String.Encoding.utf8.rawValue),
 			rc > 0 else {
 
-				throw Error(code: Socket.SOCKET_ERR_INTERNAL, reason: "Unable to convert data to NSString.")
+				throw Error(code: ErrorConstants.SOCKET_ERR_INTERNAL, reason: "Unable to convert data to NSString.")
 		}
 
 		return String(describing: str)
@@ -2658,14 +1963,14 @@ public class Socket: SocketReader, SocketWriter {
 	public func read(into data: NSMutableData) throws -> Int {
 
 		// The socket must've been created and must be connected...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		if !self.isConnected {
 
-			throw Error(code: Socket.SOCKET_ERR_NOT_CONNECTED, reason: "Socket is not connected")
+			throw Error(code: ErrorConstants.SOCKET_ERR_NOT_CONNECTED, reason: "Socket is not connected")
 		}
 
 		// Read all available bytes...
@@ -2696,14 +2001,14 @@ public class Socket: SocketReader, SocketWriter {
 	public func read(into data: inout Data) throws -> Int {
 
 		// The socket must've been created and must be connected...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		if !self.isConnected {
 
-			throw Error(code: Socket.SOCKET_ERR_NOT_CONNECTED, reason: "Socket is not connected")
+			throw Error(code: ErrorConstants.SOCKET_ERR_NOT_CONNECTED, reason: "Socket is not connected")
 		}
 
 		// Read all available bytes...
@@ -2742,20 +2047,20 @@ public class Socket: SocketReader, SocketWriter {
 		// Make sure the buffer is valid...
 		if bufSize == 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_INVALID_BUFFER, reason: "Socket has an invalid buffer, size is zero")
+			throw Error(code: ErrorConstants.SOCKET_ERR_INVALID_BUFFER, reason: "Socket has an invalid buffer, size is zero")
 		}
 
 		// The socket must've been created...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		// The socket must've been created for UDP...
 		guard let sig = self.signature,
 			sig.socketType == .datagram else {
 
-				throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
+				throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
 		}
 
 		// Read all available bytes...
@@ -2802,16 +2107,16 @@ public class Socket: SocketReader, SocketWriter {
 	public func readDatagram(into data: NSMutableData) throws -> (bytesRead: Int, address: Address?) {
 
 		// The socket must've been created...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		// The socket must've been created for UDP...
 		guard let sig = self.signature,
 			sig.socketType == .datagram else {
 
-			throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
+			throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
 		}
 
 		// Read all available bytes...
@@ -2844,16 +2149,16 @@ public class Socket: SocketReader, SocketWriter {
 	public func readDatagram(into data: inout Data) throws -> (bytesRead: Int, address: Address?) {
 
 		// The socket must've been created...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
 		}
 
 		// The socket must've been created for UDP...
 		guard let sig = self.signature,
 			sig.socketType == .datagram else {
 
-				throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
+				throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
 		}
 
 		// Read all available bytes...
@@ -2893,18 +2198,18 @@ public class Socket: SocketReader, SocketWriter {
 		// Make sure the buffer is valid...
 		if bufSize == 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_INVALID_BUFFER, reason: "The buffer is not valid, its size is zero")
+			throw Error(code: ErrorConstants.SOCKET_ERR_INVALID_BUFFER, reason: "The buffer is not valid, its size is zero")
 		}
 
 		// The socket must've been created and must be connected...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "The socket is not valid, it must be created and connected")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "The socket is not valid, it must be created and connected")
 		}
 
 		if !self.isConnected {
 
-			throw Error(code: Socket.SOCKET_ERR_NOT_CONNECTED, reason: "The socket is not connected")
+			throw Error(code: ErrorConstants.SOCKET_ERR_NOT_CONNECTED, reason: "The socket is not connected")
 		}
 
 		var sent = 0
@@ -2976,10 +2281,10 @@ public class Socket: SocketReader, SocketWriter {
 				// - Handle a connection reset by peer (ECONNRESET) and throw a different exception...
 				if errno == ECONNRESET {
 
-					throw Error(code: Socket.SOCKET_ERR_CONNECTION_RESET, reason: self.lastError())
+					throw Error(code: ErrorConstants.SOCKET_ERR_CONNECTION_RESET, reason: self.lastError())
 				}
 
-				throw Error(code: Socket.SOCKET_ERR_WRITE_FAILED, reason: self.lastError())
+				throw Error(code: ErrorConstants.SOCKET_ERR_WRITE_FAILED, reason: self.lastError())
 			}
 			sent += s
 		}
@@ -3062,20 +2367,20 @@ public class Socket: SocketReader, SocketWriter {
 		// Make sure the buffer is valid...
 		if bufSize == 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_INVALID_BUFFER, reason: "The buffer is not valid, its size is zero")
+			throw Error(code: ErrorConstants.SOCKET_ERR_INVALID_BUFFER, reason: "The buffer is not valid, its size is zero")
 		}
 
 		// The socket must've been created and must be connected...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "The socket is not valid, it must be created and connected")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "The socket is not valid, it must be created and connected")
 		}
 
 		// The socket must've been created for UDP...
 		guard let sig = self.signature,
 			sig.socketType == .datagram else {
 
-			throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
+			throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
 		}
 
 		return try address.withSockAddrPointer { addressPointer, addressLength -> Int in
@@ -3107,10 +2412,10 @@ public class Socket: SocketReader, SocketWriter {
 					// - Handle a connection reset by peer (ECONNRESET) and throw a different exception...
 					if errno == ECONNRESET {
 						
-						throw Error(code: Socket.SOCKET_ERR_CONNECTION_RESET, reason: self.lastError())
+						throw Error(code: ErrorConstants.SOCKET_ERR_CONNECTION_RESET, reason: self.lastError())
 					}
 					
-					throw Error(code: Socket.SOCKET_ERR_WRITE_FAILED, reason: self.lastError())
+					throw Error(code: ErrorConstants.SOCKET_ERR_WRITE_FAILED, reason: self.lastError())
 				}
 				sent += s
 			}
@@ -3184,14 +2489,14 @@ public class Socket: SocketReader, SocketWriter {
 	public func isReadableOrWritable(waitForever: Bool = false, timeout: UInt = 0) throws -> (readable: Bool, writable: Bool) {
 
 		// The socket must've been created and must be connected...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "The socket is not valid, it must be created and connected")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "The socket is not valid, it must be created and connected")
 		}
 
 		if !self.isConnected {
 
-			throw Error(code: Socket.SOCKET_ERR_NOT_CONNECTED, reason: "The socket is not connected")
+			throw Error(code: ErrorConstants.SOCKET_ERR_NOT_CONNECTED, reason: "The socket is not connected")
 		}
 
 		// Create a read and write file descriptor set for this socket...
@@ -3243,7 +2548,7 @@ public class Socket: SocketReader, SocketWriter {
 		// A count of less than zero indicates select failed...
 		if count < 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_SELECT_FAILED, reason: self.lastError())
+			throw Error(code: ErrorConstants.SOCKET_ERR_SELECT_FAILED, reason: self.lastError())
 		}
 
 		// Return a tuple containing whether or not this socket is readable and/or writable...
@@ -3260,7 +2565,7 @@ public class Socket: SocketReader, SocketWriter {
 		let flags = fcntl(self.socketfd, F_GETFL)
 		if flags < 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_GET_FCNTL_FAILED, reason: self.lastError())
+			throw Error(code: ErrorConstants.SOCKET_ERR_GET_FCNTL_FAILED, reason: self.lastError())
 		}
 
 		var result: Int32 = 0
@@ -3275,7 +2580,7 @@ public class Socket: SocketReader, SocketWriter {
 
 		if result < 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_SET_FCNTL_FAILED, reason: self.lastError())
+			throw Error(code: ErrorConstants.SOCKET_ERR_SET_FCNTL_FAILED, reason: self.lastError())
 		}
 
 		self.isBlocking = shouldBlock
@@ -3317,7 +2622,7 @@ public class Socket: SocketReader, SocketWriter {
 
 		if result < 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_SET_RECV_TIMEOUT_FAILED, reason: self.lastError())
+			throw Error(code: ErrorConstants.SOCKET_ERR_SET_RECV_TIMEOUT_FAILED, reason: self.lastError())
 		}
 	}
 
@@ -3357,7 +2662,7 @@ public class Socket: SocketReader, SocketWriter {
 
 		if result < 0 {
 
-			throw Error(code: Socket.SOCKET_ERR_SET_WRITE_TIMEOUT_FAILED, reason: self.lastError())
+			throw Error(code: ErrorConstants.SOCKET_ERR_SET_WRITE_TIMEOUT_FAILED, reason: self.lastError())
 		}
 	}
 	
@@ -3370,22 +2675,22 @@ public class Socket: SocketReader, SocketWriter {
 	public func udpBroadcast(enable: Bool) throws {
 		
 		// The socket must've been created and valid...
-		if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd == Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 			
-			throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "The socket is not valid, it must be created and connected")
+			throw Error(code: ErrorConstants.SOCKET_ERR_BAD_DESCRIPTOR, reason: "The socket is not valid, it must be created and connected")
 		}
 		
 		// The socket must've been created for UDP...
 		guard let sig = self.signature,
 			sig.socketType == .datagram else {
 				
-				throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
+				throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "This is not a UDP socket.")
 		}
 		
 		// Turn on or off UDP broadcasting...
 		var on: Int32 = enable ? 1 : 0
 		if setsockopt(self.socketfd, SOL_SOCKET, SO_BROADCAST, &on, socklen_t(MemoryLayout<Int32>.size)) < 0 {
-			throw Error(code: Socket.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
+			throw Error(code: ErrorConstants.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
 		}
 	}
 
@@ -3399,7 +2704,7 @@ public class Socket: SocketReader, SocketWriter {
 	///
 	private func close(withSSLCleanup: Bool) {
 
-		if self.socketfd != Socket.SOCKET_INVALID_DESCRIPTOR {
+		if self.socketfd != Socket.Defaults.SOCKET_INVALID_DESCRIPTOR {
 
 			// If we have a delegate, tell it to cleanup too...
 			if withSSLCleanup {
@@ -3424,12 +2729,12 @@ public class Socket: SocketReader, SocketWriter {
 				_ = Darwin.close(self.socketfd)
 			#endif
 
-			self.socketfd = Socket.SOCKET_INVALID_DESCRIPTOR
+			self.socketfd = Socket.Defaults.SOCKET_INVALID_DESCRIPTOR
 		}
 
 		if let _ = self.signature {
-			self.signature!.hostname = Socket.NO_HOSTNAME
-			self.signature!.port = Socket.SOCKET_INVALID_PORT
+			self.signature!.hostname = Socket.Defaults.NO_HOSTNAME
+			self.signature!.port = Socket.Defaults.SOCKET_INVALID_PORT
 
 			// If we've got a path to a UNIX socket and we're listening...
 			//		Delete the file represented by the path as this listener
@@ -3533,11 +2838,11 @@ public class Socket: SocketReader, SocketWriter {
 
 				case ECONNRESET:
 					// - Handle a connection reset by peer (ECONNRESET) and throw a different exception...
-					throw Error(code: Socket.SOCKET_ERR_CONNECTION_RESET, reason: self.lastError())
+					throw Error(code: ErrorConstants.SOCKET_ERR_CONNECTION_RESET, reason: self.lastError())
 
 				default:
 					// - Something went wrong...
-					throw Error(code: Socket.SOCKET_ERR_RECV_FAILED, reason: self.lastError())
+					throw Error(code: ErrorConstants.SOCKET_ERR_RECV_FAILED, reason: self.lastError())
 				}
 
 			}
@@ -3603,11 +2908,11 @@ public class Socket: SocketReader, SocketWriter {
 					// - Handle a connection reset by peer (ECONNRESET) and throw a different exception...
 					if errno == ECONNRESET {
 						
-						throw Error(code: Socket.SOCKET_ERR_CONNECTION_RESET, reason: self.lastError())
+						throw Error(code: ErrorConstants.SOCKET_ERR_CONNECTION_RESET, reason: self.lastError())
 					}
 					
 					// - Something went wrong...
-					throw Error(code: Socket.SOCKET_ERR_RECV_FAILED, reason: self.lastError())
+					throw Error(code: ErrorConstants.SOCKET_ERR_RECV_FAILED, reason: self.lastError())
 				}
 				
 				if count == 0 {
@@ -3619,7 +2924,7 @@ public class Socket: SocketReader, SocketWriter {
 				self.readStorage.append(self.readBuffer, length: count)
 			}) else {
 				
-				throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "Unable to determine receiving socket protocol family.")
+				throw Error(code: ErrorConstants.SOCKET_ERR_WRONG_PROTOCOL, reason: "Unable to determine receiving socket protocol family.")
 			}
 			
 			return (self.readStorage.length, address)
@@ -3683,7 +2988,7 @@ public class Socket: SocketReader, SocketWriter {
 			// MSG_NOSIGNAL flags passed to send.  See the write() functions below.
 			var on: Int32 = 1
 			if setsockopt(self.socketfd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size)) < 0 {
-				throw Error(code: Socket.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
+				throw Error(code: ErrorConstants.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
 			}
 		#endif
 	}
