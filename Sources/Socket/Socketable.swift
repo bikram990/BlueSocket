@@ -30,28 +30,8 @@ public protocol Socketable: SocketReader, SocketWriter {
     func createWriteDataSource(onQueue queue:DispatchQueue) throws -> DispatchSourceProtocol
 }
 
-extension Socketable {
+public extension Socketable {
     func acceptClientConnectionP() throws -> Socketable {
         return try self.acceptClientConnectionP(invokeDelegate: true)
-    }
-}
-
-extension Socket: Socketable {
-    public func createReadDataSource(onQueue queue:DispatchQueue) throws -> DispatchSourceProtocol {
-        return DispatchSource.makeReadSource(fileDescriptor: self.socketfd,
-                                             queue: queue)
-    }
-    
-    public func createWriteDataSource(onQueue queue:DispatchQueue) throws -> DispatchSourceProtocol {
-        return DispatchSource.makeWriteSource(fileDescriptor: self.socketfd,
-                                              queue: queue)
-    }
-    
-    public func acceptClientConnectionP(invokeDelegate: Bool) throws -> Socketable {
-        return try self.acceptClientConnection(invokeDelegate: invokeDelegate)
-    }
-    
-    public func invokeDelegateOnAcceptP(for socket: Socketable) throws {
-        try self.invokeDelegateOnAccept(for: socket as! Socket)
     }
 }
