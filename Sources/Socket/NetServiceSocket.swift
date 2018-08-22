@@ -7,35 +7,38 @@
 
 import Foundation
 
-class StreamPair: NSObject, SocketReader, SocketWriter, StreamDelegate {
+public class StreamPair: NSObject, SocketReader, SocketWriter, StreamDelegate {
 	
 	typealias Error = SocketError
 	typealias ErrorConstants = SocketError.ErrorConstants
 	
-    var inputStream:InputStream
-    var outputStream:OutputStream
-    lazy var openedInputStream:InputStream = {
-        self.inputStream.schedule(in: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
-        self.inputStream.delegate = self
-        self.inputStream.open()
-        return self.inputStream
-    }()
-    
-    lazy var openedOutputStream:OutputStream = {
-        self.outputStream.schedule(in: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
-        self.outputStream.delegate = self
-        self.outputStream.open()
-        return self.outputStream
-    }()
+    let inputStream:InputStream
+    let outputStream:OutputStream
     
     var readSource:DispatchSourceUserDataAdd! = nil
     var writeSource:DispatchSourceUserDataAdd! = nil
     var readEventCounter:UInt = 0
     var writeEventCounter:UInt = 0
     
-    init(inputStream:InputStream, outputStream:OutputStream) {
+    var isInputStreamOpen:Bool = false
+    var isOutputStreamOpen:Bool = false
+    public var isOpen:Bool {
+        get {
+            return (self.isInputStreamOpen && self.isOutputStreamOpen)
+        }
+    }
+    
+    public init(inputStream:InputStream, outputStream:OutputStream) {
         self.inputStream = inputStream
         self.outputStream = outputStream
+        super.init()
+        
+        self.inputStream.schedule(in: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
+        self.outputStream.schedule(in: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
+        self.inputStream.delegate = self
+        self.outputStream.delegate = self
+        self.inputStream.open()
+        self.outputStream.open()
     }
     
     deinit {
@@ -43,41 +46,50 @@ class StreamPair: NSObject, SocketReader, SocketWriter, StreamDelegate {
         self.close()
     }
     
-    func createReadDataSource(onQueue queue:DispatchQueue) -> DispatchSourceProtocol {
+    public func createReadDataSource(onQueue queue:DispatchQueue) -> DispatchSourceProtocol {
         self.readSource = DispatchSource.makeUserDataAddSource(queue: queue)
-        _ = self.openedInputStream
         return self.readSource
     }
     
-    func createWriteDataSource(onQueue queue:DispatchQueue) -> DispatchSourceProtocol {
+    public func createWriteDataSource(onQueue queue:DispatchQueue) -> DispatchSourceProtocol {
         self.writeSource = DispatchSource.makeUserDataAddSource(queue: queue)
-        _ = self.openedOutputStream
         return self.writeSource
     }
     
-    func cancel() -> Void {
+    private func cancel() -> Void {
         if self.readSource != nil {
             self.readSource.cancel()
             self.readSource = nil
         }
+        
         if self.writeSource != nil {
             self.writeSource.cancel()
             self.writeSource = nil
         }
     }
     
-    func close() -> Void {
-        self.openedInputStream.remove(from: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
-        self.openedInputStream.close()
-        self.openedOutputStream.remove(from: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
-        self.openedOutputStream.close()
+    public func close() -> Void {
+        if self.isInputStreamOpen {
+            self.isInputStreamOpen = false
+            self.inputStream.close()
+        }
+        if self.isOutputStreamOpen {
+            self.isOutputStreamOpen = false
+            self.outputStream.close()
+        }
     }
     
-    func stream(_ aStream: Stream, handle eventCode: Stream.Event) {
+    public func stream(_ aStream: Stream, handle eventCode: Stream.Event) {
         switch eventCode {
         case .openCompleted:
             //tell that connection is open now
             print("did open")
+            if aStream == self.inputStream {
+                self.isInputStreamOpen = true
+            }
+            else if aStream == self.outputStream {
+                self.isOutputStreamOpen = true
+            }
         case .hasBytesAvailable:
             //read from input stream
             print("has bytes")
@@ -94,16 +106,18 @@ class StreamPair: NSObject, SocketReader, SocketWriter, StreamDelegate {
             }
         case .errorOccurred:
             print("error occurred")
+            aStream.remove(from: RunLoop.current, forMode: RunLoopMode.defaultRunLoopMode)
             self.cancel()
         case .endEncountered:
             print("end encountered")
+            aStream.remove(from: RunLoop.current, forMode: RunLoopMode.defaultRunLoopMode)
             self.cancel()
         default:
             print("Unknown event")
         }
     }
     
-    func readString() throws -> String? {
+    public func readString() throws -> String? {
         var data:Data = Data()
         _ = try self.read(into: &data)
         
@@ -115,11 +129,14 @@ class StreamPair: NSObject, SocketReader, SocketWriter, StreamDelegate {
         }
     }
     
-    func read(into data: inout Data) throws -> Int {
+    public func read(into data: inout Data) throws -> Int {
+        guard self.isInputStreamOpen else {
+            throw Error(code: ErrorConstants.SOCKET_ERR_NOT_CONNECTED, reason: "Input stream is not open")
+        }
         var buffer = [UInt8](repeating: 0, count: 1)
         var readLength:Int = 0
-        while (self.openedInputStream.hasBytesAvailable) {
-            let bytesRead:Int = self.openedInputStream.read(&buffer, maxLength: buffer.count)
+        while (self.inputStream.hasBytesAvailable) {
+            let bytesRead:Int = self.inputStream.read(&buffer, maxLength: buffer.count)
             if bytesRead >= 0 {
                 readLength += bytesRead
                 data.append(buffer, count: bytesRead)
@@ -128,11 +145,14 @@ class StreamPair: NSObject, SocketReader, SocketWriter, StreamDelegate {
         return readLength
     }
     
-    func read(into data: NSMutableData) throws -> Int {
+    public func read(into data: NSMutableData) throws -> Int {
+        guard self.isInputStreamOpen else {
+            throw Error(code: ErrorConstants.SOCKET_ERR_NOT_CONNECTED, reason: "Input stream is not open")
+        }
         var buffer = [UInt8](repeating: 0, count: 1)
         var readLength:Int = 0
-        while (self.openedInputStream.hasBytesAvailable) {
-            let bytesRead:Int = self.openedInputStream.read(&buffer, maxLength: buffer.count)
+        while (self.inputStream.hasBytesAvailable) {
+            let bytesRead:Int = self.inputStream.read(&buffer, maxLength: buffer.count)
             if bytesRead >= 0 {
                 readLength += bytesRead
                 data.append(buffer, length: bytesRead)
@@ -141,18 +161,18 @@ class StreamPair: NSObject, SocketReader, SocketWriter, StreamDelegate {
         return readLength
     }
     
-    func write(from data: Data) throws -> Int {
+    public func write(from data: Data) throws -> Int {
         let numberOfBytesWritten = try data.withUnsafeBytes {
             try self.write(from: $0, bufSize: data.count)
         }
         return numberOfBytesWritten
     }
     
-    func write(from data: NSData) throws -> Int {
+    public func write(from data: NSData) throws -> Int {
         return try self.write(from: data as Data)
     }
     
-    func write(from string: String) throws -> Int {
+    public func write(from string: String) throws -> Int {
         if let data:Data = string.data(using: .utf8) {
             return try self.write(from: data)
         }
@@ -161,8 +181,11 @@ class StreamPair: NSObject, SocketReader, SocketWriter, StreamDelegate {
         }
     }
     
-    func write(from buffer: UnsafeRawPointer, bufSize: Int) throws -> Int {
-        let numberOfBytesWritten = self.openedOutputStream.write(buffer.assumingMemoryBound(to: UInt8.self), maxLength: bufSize)
+    public func write(from buffer: UnsafeRawPointer, bufSize: Int) throws -> Int {
+        guard self.isOutputStreamOpen else {
+            throw Error(code: ErrorConstants.SOCKET_ERR_NOT_CONNECTED, reason: "Output stream is not open")
+        }
+        let numberOfBytesWritten = self.outputStream.write(buffer.assumingMemoryBound(to: UInt8.self), maxLength: bufSize)
         return numberOfBytesWritten
     }
     
@@ -185,34 +208,21 @@ public class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
     
     public var remoteHostname: String {
         get {
-            return Defaults.NO_HOSTNAME
+            return (self.isListening ? Defaults.NO_HOSTNAME : ((self.service != nil) ? self.service!.name : Defaults.NO_HOSTNAME))
         }
     }
     
-    public var remotePort: Int32 {
-        get {
-            return Defaults.SOCKET_INVALID_PORT
-        }
-    }
-    
-    public var signature: SocketSignature? {
-        get {
-            return nil
-        }
-    }
-    
+    public var remotePort: Int32 = Defaults.SOCKET_INVALID_PORT
+    public var signature: SocketSignature? = nil
     public var delegate: SSLServiceDelegate?
-    
     public var isListening: Bool = false
-    
     public var listeningPort: Int32 {
         get {
-            return Int32(self.service?.port ?? Int(SocketDefaults.SOCKET_INVALID_PORT))
+            return (self.isListening ? Int32(self.service!.port) : SocketDefaults.SOCKET_INVALID_PORT)
         }
     }
     
     public var socketfd: Int32
-    
     public var remoteConnectionClosed: Bool {
         get {
             return (self.pair == nil)
@@ -258,7 +268,18 @@ public class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
     private(set) var domain:String
     var port:Int?
     
-    private(set) var pair:StreamPair?
+    private(set) public var pair:StreamPair?
+    public var canWrite:Bool {
+        get {
+            return self.isServer ? false : self.pair!.outputStream.hasSpaceAvailable
+        }
+    }
+    
+    public var canRead:Bool {
+        get {
+            return self.isServer ? false : self.pair!.inputStream.hasBytesAvailable
+        }
+    }
     
     //MARK: - initializers
     public init(serverWithName name:String, type:String, domain:String, port:Int) {
@@ -280,6 +301,7 @@ public class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
         self.type = serverSocket.type
         self.domain = serverSocket.domain
         self.pair = pair
+        self.port = serverSocket.port
         if let lastFileDescriptor = NetServiceSocket.clientFileDescriptors.last {
             self.socketfd = lastFileDescriptor + 1
         }
@@ -287,6 +309,29 @@ public class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
             self.socketfd = 0
         }
         NetServiceSocket.clientFileDescriptors.append(self.socketfd)
+    }
+    
+    public init(withService service:NetService) throws {
+        self.service = service
+        self.type = service.type
+        self.domain = service.domain
+        self.remotePort = Int32(service.port)
+        self.isServer = false
+        if let lastFileDescriptor = NetServiceSocket.clientFileDescriptors.last {
+            self.socketfd = lastFileDescriptor + 1
+        }
+        else {
+            self.socketfd = 0
+        }
+        NetServiceSocket.clientFileDescriptors.append(self.socketfd)
+        var inputStream:InputStream?
+        var outputStream:OutputStream?
+        guard service.getInputStream(&inputStream, outputStream: &outputStream),
+            let input:InputStream = inputStream,
+            let output:OutputStream = outputStream else {
+            throw Error(code: ErrorConstants.SOCKET_ERR_NOT_ACTIVE, reason: "Failed to get input and ouput stream")
+        }
+        self.pair = StreamPair.init(inputStream: input, outputStream: output)
     }
     
     deinit {
@@ -300,19 +345,24 @@ public class NetServiceSocket: NSObject, NetServiceDelegate, Socketable {
     
     //MARK: - Listen
     func listenForConnections(includingPeer2Peer shouldIncludePeer2Peer:Bool) throws -> Void {
-        guard let name:String = self.name else { return }
-        guard let port:Int = self.port else { return }
+        guard let name:String = self.name else {
+            throw Error(code: ErrorConstants.SOCKET_ERR_INVALID_HOSTNAME, reason: "Name is not set")
+        }
+        guard let port:Int = self.port else {
+            throw Error(code: ErrorConstants.SOCKET_ERR_INVALID_PORT, reason: "Port is not set")
+        }
+        guard self.isServer else {
+            throw Error(code: ErrorConstants.SOCKET_ERR_LISTEN_FAILED, reason: "Can't listen on a client type socket")
+        }
         
         DispatchQueue.main.async {
             self.service = NetService.init(domain: self.domain, type: self.type, name: name, port: Int32(port))
             self.service?.delegate = self
             self.service?.includesPeerToPeer = shouldIncludePeer2Peer
-            self.service?.publish(options: [NetService.Options.listenForConnections])
+            self.service?.publish(options: [NetService.Options.listenForConnections, NetService.Options.noAutoRename])
         }
         self.listenSemaphore.wait()
     }
-    
-    
     
     //MARK: - handling
     public func close() -> Void {
