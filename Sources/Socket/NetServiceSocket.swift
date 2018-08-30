@@ -93,17 +93,11 @@ public class StreamPair: NSObject, SocketReader, SocketWriter, StreamDelegate {
         case .hasBytesAvailable:
             //read from input stream
             print("has bytes")
-            if self.readSource != nil {
-                self.readEventCounter += 1
-                self.readSource.add(data: self.readEventCounter)
-            }
+            self.addReadEvent()
         case .hasSpaceAvailable:
             //write to output stream
             print("has space")
-            if self.writeSource != nil {
-                self.writeEventCounter += 1
-                self.writeSource.add(data: self.writeEventCounter)
-            }
+            self.addWriteEvent()
         case .errorOccurred:
             print("error occurred")
             aStream.remove(from: RunLoop.current, forMode: RunLoopMode.defaultRunLoopMode)
@@ -114,6 +108,32 @@ public class StreamPair: NSObject, SocketReader, SocketWriter, StreamDelegate {
             self.cancel()
         default:
             print("Unknown event")
+        }
+    }
+    
+    func addReadEvent() -> Void {
+        if self.readSource != nil {
+            print("adding event")
+            self.readEventCounter += 1
+            self.readSource.add(data: self.readEventCounter)
+        }
+        else {
+            DispatchQueue.main.async {
+                self.addReadEvent()
+            }
+        }
+    }
+    
+    func addWriteEvent() -> Void {
+        if self.writeSource != nil {
+            print("adding event")
+            self.writeEventCounter += 1
+            self.writeSource.add(data: self.writeEventCounter)
+        }
+        else {
+            DispatchQueue.main.async {
+                self.addWriteEvent()
+            }
         }
     }
     
